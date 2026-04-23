@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintenance KAI System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="manifest" href="manifest.json">
+    
+    <meta name="theme-color" content="#163a4a">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="./icon_100_/icon-192x192.png">
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Hide element class */
+        .hidden-page { display: none !important; }
+
+        .nav-btn.is-active .icon-normal { display: none !important; }
+        .nav-btn.is-active .icon-active { display: block !important; }
+        .nav-btn.is-active span { color: #f97316; }
+    </style>
+</head>
+<body class="bg-gray-200 h-[100dvh] w-full overflow-hidden flex flex-col font-sans text-sm">
+  <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
+    <main class="flex-1 overflow-auto relative">
+        <section id="page-home" class="page-section absolute inset-0 bg-[#0B3342] bg-[url('./icon_100_/bg.png')] bg-contain bg-center bg-repeat text-white flex flex-col">
+            <div class="flex-1 flex flex-col items-center justify-center gap-12">
+                <div class="flex gap-24 text-center">
+                    <div class="flex flex-col items-center cursor-pointer hover:scale-105 transition" onclick="goTo('rail')">
+                        <img src="./icon_100_/rail1.png" alt="Rail Surface" class="w-28 h-28 mb-4 object-contain">
+                        <span class="font-bold text-lg">Rail Surface</span>
+                    </div>
+
+                    <div class="flex flex-col items-center cursor-pointer hover:scale-105 transition" onclick="goTo('ballast')">
+                        <img src="./icon_100_/ballast1.png" alt="Ballast" class="w-28 h-28 mb-4 object-contain">
+                        <span class="font-bold text-lg">Ballast</span>
+                    </div>
+
+                    <div class="flex flex-col items-center cursor-pointer hover:scale-105 transition" onclick="goTo('fastener')">
+                        <img src="./icon_100_/fastener1.png" alt="Fastener" class="w-28 h-28 mb-4 object-contain">
+                        <span class="font-bold text-lg">Fastener</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-24 text-center">
+                    <div class="flex flex-col items-center cursor-pointer hover:scale-105 transition" onclick="sendExportCommand()">
+                        <img src="./icon_100_/report1.png" alt="Report" class="w-28 h-28 mb-4 object-contain">
+                        <span class="font-bold text-lg">Report</span>
+                    </div>
+
+                    <div class="flex flex-col items-center cursor-pointer hover:scale-105 transition" onclick="toggleModal('modal-setting', true)">
+                        <img src="./icon_100_/setting1.png" alt="Setting" class="w-28 h-28 mb-4 object-contain">
+                        <span class="font-bold text-lg">Setting</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="page-rail" class="page-section hidden-page absolute inset-0 p-2 flex flex-col gap-2 overflow-hidden">
+            <div class="grid grid-cols-2 gap-2 flex-1 min-h-0">
+                <div class="bg-gray-300 flex flex-col border border-gray-400 min-h-0">
+                    <div class="bg-gray-400 text-center font-bold py-1 shrink-0">Left Rail Defect Detection</div>
+                    <div class="flex flex-1 p-1 gap-1 min-h-0">
+                        <div class="w-1/3 bg-white border border-gray-300 flex items-center justify-center text-gray-400 overflow-hidden relative" id="graph-defect-left">
+                            <canvas id="chart-left" class="absolute inset-0 w-full h-full p-1"></canvas>
+                        </div>
+                        <div class="w-2/3 bg-white border border-gray-300 overflow-hidden" id="frame-defect-left"></div>
+                    </div>
+                </div>
+                <div class="bg-gray-300 flex flex-col border border-gray-400 min-h-0">
+                    <div class="bg-gray-400 text-center font-bold py-1 shrink-0">Right Rail Defect Detection</div>
+                    <div class="flex flex-1 p-1 gap-1 min-h-0">
+                        <div class="w-2/3 bg-white border border-gray-300 overflow-hidden" id="frame-defect-right"></div>
+                        <div class="w-1/3 bg-white border border-gray-300 flex items-center justify-center text-gray-400 overflow-hidden relative" id="graph-defect-right">
+                            <canvas id="chart-right" class="absolute inset-0 w-full h-full p-1"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 shrink-0 h-1/2">
+                <div class="bg-gray-300 flex flex-col border border-gray-400 min-h-0 overflow-hidden">
+                    <div class="bg-gray-400 text-center font-bold py-1 shrink-0">Left Rail Detail</div>
+                    <div class="flex flex-1 p-1 gap-1 min-h-0 overflow-hidden">
+                        <div class="text-[0.6rem] leading-[1.5] w-1/3 bg-white border border-gray-300 p-2 flex flex-col overflow-hidden">
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Date</span><span class="leading-none">:</span><span id="date-left" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Time</span><span class="leading-none">:</span><span id="time-left" class="flex-1 text-right"></span></div>
+                            <div class="bg-gray-300 text-center font-bold mt-1">Location</div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Latitude</span><span class="leading-none">:</span><span id="lat-left" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Longitude</span><span class="leading-none">:</span><span id="long-left" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">KM+HM</span><span class="leading-none">:</span><span id="kmhm-left" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Accuracy</span><span class="leading-none">:</span><span id="accuracy-left" class="flex-1 text-right"></span></div>
+                            <div class="bg-gray-300 text-center font-bold mt-1">Defect</div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Corrugations</span><span class="leading-none">:</span><span id="corrugation-left" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Rail End</span><span class="leading-none">:</span><span id="rail-end-left" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Shelling</span><span class="leading-none">:</span><span id="shelling-left" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Squat</span><span class="leading-none">:</span><span id="squat-left" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1 font-bold"><span class="w-24 shrink-0">Total Defect</span><span class="leading-none">:</span><span id="total-defect-left" class="flex-1 text-right"></span></div>                        
+                        </div>
+                        <div class="w-2/3 bg-white border border-gray-300 overflow-hidden relative" id="img-defect-left"></div>
+                    </div>
+                </div>
+                <div class="bg-gray-300 flex flex-col border border-gray-400 min-h-0 overflow-hidden">
+                    <div class="bg-gray-400 text-center font-bold py-1 shrink-0">Right Rail Detail</div>
+                    <div class="flex flex-1 p-1 gap-1 min-h-0 overflow-hidden">
+                        <div class="w-2/3 bg-white border border-gray-300 overflow-hidden relative" id="img-defect-right"></div>
+                        <div class="text-[0.6rem] leading-[1.5] w-1/3 bg-white border border-gray-300 p-2 flex flex-col overflow-hidden">
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Date</span><span class="leading-none">:</span><span id="date-right" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Time</span><span class="leading-none">:</span><span id="time-right" class="flex-1 text-right"></span></div>
+                            <div class="bg-gray-300 text-center font-bold mt-1">Location</div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Latitude</span><span class="leading-none">:</span><span id="lat-right" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Longitude</span><span class="leading-none">:</span><span id="long-right" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">KM+HM</span><span class="leading-none">:</span><span id="kmhm-right" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Accuracy</span><span class="leading-none">:</span><span id="accuracy-right" class="flex-1 text-right"></span></div>
+                            <div class="bg-gray-300 text-center font-bold mt-1">Defect</div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Corrugations</span><span class="leading-none">:</span><span id="corrugation-right" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Rail End</span><span class="leading-none">:</span><span id="rail-end-right" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Shelling</span><span class="leading-none">:</span><span id="shelling-right" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1"><span class="w-24 shrink-0">Squat</span><span class="leading-none">:</span><span id="squat-right" class="flex-1 text-right"></span></div>
+                            <div class="flex items-center gap-1 font-bold"><span class="w-24 shrink-0">Total Defect</span><span class="leading-none">:</span><span id="total-defect-right" class="flex-1 text-right"></span></div>                        
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="page-fastener" class="page-section hidden-page absolute inset-0 p-2 flex flex-col gap-2">
+            <div class="grid grid-cols-2 gap-2 h-1/2">
+                <div class="border border-gray-400 flex flex-col">
+                    <div class="bg-gray-400 text-center font-bold py-2 border-b border-gray-400">Left Monitoring System</div>
+                    <div class="bg-white flex-1 min-h-0 border-b border-gray-400 overflow-hidden relative [&>img]:absolute [&>img]:inset-0 [&>img]:w-full [&>img]:h-full [&>img]:object-fill" id="frame-fastener-left"></div>
+                    <div class="bg-white h-8 grid grid-cols-4 divide-x divide-gray-300 text-xs items-center px-2">
+                        <div class="flex justify-between pr-2"><span>DE-Clip</span><span>: <b id="clip-left-de">0</b></span></div>
+                        <div class="flex justify-between px-2"><span>E-Clip</span><span>: <b id="clip-left-e">0</b></span></div>
+                        <div class="flex justify-between px-2"><span>KA-Clip</span><span>: <b id="clip-left-ka">0</b></span></div>
+                        <div class="flex justify-between pl-2"><span>No Clip</span><span>: <b id="clip-left-no">0</b></span></div>
+                    </div>
+                </div>
+                <div class="border border-gray-400 flex flex-col">
+                    <div class="bg-gray-400 text-center font-bold py-2 border-b border-gray-400">Right Monitoring System</div>
+                    <div class="bg-white flex-1 min-h-0 border-b border-gray-400 overflow-hidden relative [&>img]:absolute [&>img]:inset-0 [&>img]:w-full [&>img]:h-full [&>img]:object-fill" id="frame-fastener-right"></div>
+                    <div class="bg-white h-8 grid grid-cols-4 divide-x divide-gray-300 text-xs items-center px-2">
+                        <div class="flex justify-between pr-2"><span>DE-Clip</span><span>: <b id="clip-right-de">0</b></span></div>
+                        <div class="flex justify-between px-2"><span>E-Clip</span><span>: <b id="clip-right-e">0</b></span></div>
+                        <div class="flex justify-between px-2"><span>KA-Clip</span><span>: <b id="clip-right-ka">0</b></span></div>
+                        <div class="flex justify-between pl-2"><span>No Clip</span><span>: <b id="clip-right-no">0</b></span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="border border-gray-400 flex flex-col flex-1">
+                <div class="bg-gray-400 text-center font-bold py-1 border-b border-gray-400">Sleeper Condition Analysis</div>
+                <div class="flex-1 grid grid-cols-4 grid-rows-2 gap-1 p-1 bg-gray-200">
+                    <div class="bg-white border border-gray-300 col-span-2 relative p-1 flex flex-col">
+                        <span class="text-[10px] font-bold text-center text-gray-600 absolute top-1 w-full left-0 z-10">Left: DE-Clip & E-Clip</span>
+                        <canvas id="chart-clip-left-1" class="absolute inset-0 w-full h-full pt-4 px-1 pb-1"></canvas>
+                    </div>
+                    <div class="bg-white border border-gray-300 col-span-2 relative p-1 flex flex-col">
+                        <span class="text-[10px] font-bold text-center text-gray-600 absolute top-1 w-full left-0 z-10">Right: DE-Clip & E-Clip</span>
+                        <canvas id="chart-clip-right-1" class="absolute inset-0 w-full h-full pt-4 px-1 pb-1"></canvas>
+                    </div>
+                    
+                    <div class="bg-white border border-gray-300 col-span-2 relative p-1 flex flex-col">
+                        <span class="text-[10px] font-bold text-center text-gray-600 absolute top-1 w-full left-0 z-10">Left: KA-Clip & No Clip</span>
+                        <canvas id="chart-clip-left-2" class="absolute inset-0 w-full h-full pt-4 px-1 pb-1"></canvas>
+                    </div>
+                    <div class="bg-white border border-gray-300 col-span-2 relative p-1 flex flex-col">
+                        <span class="text-[10px] font-bold text-center text-gray-600 absolute top-1 w-full left-0 z-10">Right: KA-Clip & No Clip</span>
+                        <canvas id="chart-clip-right-2" class="absolute inset-0 w-full h-full pt-4 px-1 pb-1"></canvas>
+                    </div>
+                </div>
+            </div>        
+        </section>
+
+        <section id="page-ballast" class="page-section hidden-page absolute inset-0 p-2 flex flex-col gap-2">
+            <div class="grid grid-cols-2 gap-2 flex-1 min-h-0">
+                <div class="border border-gray-400 flex flex-col">
+                    <div class="bg-gray-400 text-center font-bold py-2 border-b border-gray-400 text-lg">Left Monitoring System</div>
+                    <div class="bg-white flex-1 min-h-0 border-b border-gray-400 overflow-hidden relative [&>img]:absolute [&>img]:inset-0 [&>img]:w-full [&>img]:h-full [&>img]:object-fill" id="frame-ballast-left"></div>
+                    <div class="bg-white h-12 grid grid-cols-2 divide-x divide-gray-300 text-sm font-semibold items-center px-4">
+                        <div class="flex justify-between pr-4"><span>Mud Pumping</span><span>: <b id="mud-pumping-left" class="text-base">0</b></span></div>
+                        <div class="flex justify-between pl-4"><span>White Ballast</span><span>: <b id="white-ballast-left" class="text-base">0</b></span></div>
+                    </div>
+                </div>
+                <div class="border border-gray-400 flex flex-col">
+                    <div class="bg-gray-400 text-center font-bold py-2 border-b border-gray-400 text-lg">Right Monitoring System</div>
+                    <div class="bg-white flex-1 min-h-0 border-b border-gray-400 overflow-hidden relative [&>img]:absolute [&>img]:inset-0 [&>img]:w-full [&>img]:h-full [&>img]:object-fill" id="frame-ballast-right"></div>
+                    <div class="bg-white h-12 grid grid-cols-2 divide-x divide-gray-300 text-sm font-semibold items-center px-4">
+                        <div class="flex justify-between pr-4"><span>Mud Pumping</span><span>: <b id="mud-pumping-right" class="text-base">0</b></span></div>
+                        <div class="flex justify-between pl-4"><span>White Ballast</span><span>: <b id="white-ballast-right" class="text-base">0</b></span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+<nav id="bottom-navbar" class="hidden-page h-18 bg-white border-t border-gray-300 flex items-center px-4 shrink-0 shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
+        
+        <div class="flex-1"></div>
+
+        <div class="flex items-center justify-center gap-4 h-full py-2">
+            <button id="btn-home" onclick="goTo('home')" class="nav-btn group w-20 flex flex-col items-center justify-center transition text-gray-500 hover:text-orange-500 bg-transparent outline-none"><img src="./icon_100_/home0.png" class="w-10 h-10 mb-1 block group-hover:hidden icon-normal"><img src="./icon_100_/home1.png" class="w-10 h-10 mb-1 hidden group-hover:block icon-active"><span class="text-xs font-semibold">Home</span></button>
+            <button id="btn-rail" onclick="goTo('rail')" class="nav-btn group w-20 flex flex-col items-center justify-center transition text-gray-500 hover:text-orange-500 bg-transparent outline-none"><img src="./icon_100_/rail0.png" class="w-10 h-10 mb-1 block group-hover:hidden icon-normal"><img src="./icon_100_/rail1.png" class="w-10 h-10 mb-1 hidden group-hover:block icon-active"><span class="text-xs font-semibold">Rail</span></button>
+            <button id="btn-ballast" onclick="goTo('ballast')" class="nav-btn group w-20 flex flex-col items-center justify-center transition text-gray-500 hover:text-orange-500 bg-transparent outline-none"><img src="./icon_100_/ballast0.png" class="w-10 h-10 mb-1 block group-hover:hidden icon-normal"><img src="./icon_100_/ballast1.png" class="w-10 h-10 mb-1 hidden group-hover:block icon-active"><span class="text-xs font-semibold">Ballast</span></button>
+            <button id="btn-fastener" onclick="goTo('fastener')" class="nav-btn group w-20 flex flex-col items-center justify-center transition text-gray-500 hover:text-orange-500 bg-transparent outline-none"><img src="./icon_100_/fastener0.png" class="w-10 h-10 mb-1 block group-hover:hidden icon-normal"><img src="./icon_100_/fastener1.png" class="w-10 h-10 mb-1 hidden group-hover:block icon-active"><span class="text-xs font-semibold">Fastener</span></button>
+            <button onclick="sendExportCommand()" class="nav-btn group w-20 flex flex-col items-center justify-center transition text-gray-500 hover:text-orange-500 bg-transparent outline-none"><img src="./icon_100_/report0.png" class="w-10 h-10 mb-1 block group-hover:hidden icon-normal"><img src="./icon_100_/report1.png" class="w-10 h-10 mb-1 hidden group-hover:block icon-active"><span class="text-xs font-semibold">Report</span></button>
+            <button onclick="toggleModal('modal-setting', true)" class="nav-btn group w-20 flex flex-col items-center justify-center transition text-gray-500 hover:text-orange-500 bg-transparent outline-none"><img src="./icon_100_/setting0.png" class="w-10 h-10 mb-1 block group-hover:hidden icon-normal"><img src="./icon_100_/setting1.png" class="w-10 h-10 mb-1 hidden group-hover:block icon-active"><span class="text-xs font-semibold">Setting</span></button>
+        </div>
+        
+        <div class="flex-1 flex justify-end h-full py-2">
+            <div class="flex items-center gap-2 border-l border-gray-300 pl-4">
+                
+                <div id="container-threshold" class="hidden-page flex flex-col items-center justify-center mr-2">
+                    <label for="input-threshold" class="text-xs font-semibold  mb-1">Threshold</label>
+                    <input type="number" id="input-threshold" value="2" step="1" min="1" max="3" onchange="updateThreshold()" class="border border-gray-300 rounded px-1 py-0.5 w-16 text-xs text-center font-bold text-gray-700 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500">
+                </div>
+
+                <button id="btn-play" onclick="togglePlay()" class="w-20 flex flex-col items-center justify-center hover:bg-gray-100 rounded transition text-gray-700">
+                    <i id="icon-play" class="fas fa-play-circle text-3xl mb-1"></i>
+                    <span class="text-xs font-semibold">Play/Pause</span>
+                </button>
+                <button class="w-20 flex flex-col items-center justify-center hover:bg-gray-100 rounded transition text-gray-700">
+                    <i class="fas fa-sync-alt text-3xl mb-1"></i>
+                    <span class="text-xs font-semibold">Clear</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+    <div id="modal-setting" class="hidden-page fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-[#f0f0f0] w-[800px] border border-gray-400 shadow-xl flex flex-col">
+            <div class="p-4 border-b border-gray-300">
+                <h2 class="text-center text-lg font-semibold tracking-wide mb-4">SETTINGS SYSTEM</h2>
+                <div class="border border-gray-300 p-4 grid grid-cols-2 gap-6 bg-white/50">
+                    <div class="flex flex-col gap-3">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="input_mode" id="radio-stream" checked onchange="handleInputModeChange()" class="w-4 h-4">
+                            <span class="font-semibold">STREAM</span>
+                        </label>
+                        <div class="flex items-center justify-between">
+                            <span>LEFT CAMERA</span>
+                            <select id="cam-left" class="border border-gray-300 px-2 py-1 w-48 text-xs bg-white focus:outline-none"><option>Camera 0</option><option>Camera 1</option></select>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span>RIGHT CAMERA</span>
+                            <select id="cam-right" class="border border-gray-300 px-2 py-1 w-48 text-xs bg-white focus:outline-none"><option>Camera 0</option><option>Camera 1</option></select>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-3">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="input_mode" id="radio-load" onchange="handleInputModeChange()" class="w-4 h-4">
+                            <span class="font-semibold">LOAD VIDEO</span>
+                        </label>
+                        <div class="flex gap-2">
+                            <input type="text" id="vid-left" disabled placeholder="PATH VIDEO LEFT..." class="border border-gray-300 px-2 py-1 w-full text-xs bg-gray-100 disabled:bg-gray-200 focus:outline-none">
+                            <button id="btn-vid-left" disabled class="border border-gray-300 px-3 bg-gray-100 disabled:bg-gray-200 hover:bg-gray-200 text-xs">...</button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="vid-right" disabled placeholder="PATH VIDEO RIGHT..." class="border border-gray-300 px-2 py-1 w-full text-xs bg-gray-100 disabled:bg-gray-200 focus:outline-none">
+                            <button id="btn-vid-right" disabled class="border border-gray-300 px-3 bg-gray-100 disabled:bg-gray-200 hover:bg-gray-200 text-xs">...</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-b border-gray-300">
+                <h2 class="text-center text-lg font-semibold tracking-wide mb-4">INFORMASI OPERATOR</h2>
+                <div class="border border-gray-300 p-4 grid grid-cols-2 gap-x-6 gap-y-3 bg-white/50">
+                    <div class="flex items-center justify-between gap-2"><span class="text-xs font-semibold whitespace-nowrap w-28">NAMA OPERATOR</span><input type="text" class="border border-gray-300 px-2 py-1 w-full text-xs focus:outline-none"></div>
+                    <div class="flex items-center justify-between gap-2"><span class="text-xs font-semibold whitespace-nowrap w-16">NIPP</span><input type="text" class="border border-gray-300 px-2 py-1 w-full text-xs focus:outline-none"></div>
+                    <div class="flex items-center justify-between gap-2"><span class="text-xs font-semibold whitespace-nowrap w-28">NAMA PJJ</span><input type="text" class="border border-gray-300 px-2 py-1 w-full text-xs focus:outline-none"></div>
+                    <div class="flex items-center justify-between gap-2"><span class="text-xs font-semibold whitespace-nowrap w-16">NIPP</span><input type="text" class="border border-gray-300 px-2 py-1 w-full text-xs focus:outline-none"></div>
+                    <div class="flex items-center justify-between gap-2"><span class="text-xs font-semibold whitespace-nowrap w-28">KEDUDUKAN</span><input type="text" class="border border-gray-300 px-2 py-1 w-full text-xs focus:outline-none"></div>
+                    <div class="flex items-center justify-between gap-2"><span class="text-xs font-semibold whitespace-nowrap w-16">LINTAS</span><input type="text" class="border border-gray-300 px-2 py-1 w-full text-xs focus:outline-none"></div>
+                    <div class="flex items-center justify-between gap-2"><span class="text-xs font-semibold whitespace-nowrap w-28">NOMOR SARANA</span><input type="text" class="border border-gray-300 px-2 py-1 w-full text-xs focus:outline-none"></div>
+                </div>
+            </div>
+
+            <div class="p-4 flex flex-col gap-2 bg-gray-100">
+                <button onclick="clearApp()" class="w-full border border-gray-400 bg-white hover:bg-gray-50 py-2 font-semibold tracking-wide shadow-sm transition">CLEAR APP</button>
+                <button onclick="toggleModal('modal-setting', false)" class="w-full border border-gray-400 bg-white hover:bg-gray-50 py-2 font-semibold tracking-wide shadow-sm transition">SAVE</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(r => console.log('SW terdaftar')).catch(e => console.error('SW gagal', e));
+            });
+        }
+
+        function goTo(pageId) {
+            document.querySelectorAll('.page-section').forEach(page => page.classList.add('hidden-page'));
+            const targetPage = document.getElementById('page-' + pageId);
+            if (targetPage) targetPage.classList.remove('hidden-page');
+
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('is-active'));
+            const activeBtn = document.getElementById('btn-' + pageId);
+            if (activeBtn) activeBtn.classList.add('is-active');
+
+            const navbar = document.getElementById('bottom-navbar');
+            if (pageId === 'home') navbar.classList.add('hidden-page');
+            else navbar.classList.remove('hidden-page');
+
+            // --- LOGIKA MUNCUL/HILANG THRESHOLD ---
+            const thresholdContainer = document.getElementById('container-threshold');
+            if (thresholdContainer) {
+                if (pageId === 'rail') {
+                    thresholdContainer.classList.remove('hidden-page'); // Tampilkan di page Rail
+                } else {
+                    thresholdContainer.classList.add('hidden-page');    // Sembunyikan di page lain
+                }
+            }
+
+            // Set Trigger Mode Model
+            if (pageId === 'rail') sendBackendCommand('set_mode', 'segformer');
+            else if (pageId === 'fastener') sendBackendCommand('set_mode', 'yolo');
+            else sendBackendCommand('set_mode', 'standby');
+        }
+
+        function toggleModal(modalId, show) {
+            const modal = document.getElementById(modalId);
+            if (show) modal.classList.remove('hidden-page');
+            else modal.classList.add('hidden-page');
+        }
+
+        function handleInputModeChange() {
+            const isStream = document.getElementById('radio-stream').checked;
+            document.getElementById('cam-left').disabled = !isStream;
+            document.getElementById('cam-right').disabled = !isStream;
+            document.getElementById('vid-left').disabled = isStream;
+            document.getElementById('vid-left').classList.toggle('bg-white', !isStream);
+            document.getElementById('btn-vid-left').disabled = isStream;
+            document.getElementById('vid-right').disabled = isStream;
+            document.getElementById('vid-right').classList.toggle('bg-white', !isStream);
+            document.getElementById('btn-vid-right').disabled = isStream;
+        }
+
+        let isPlaying = false;
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            const icon = document.getElementById('icon-play');
+            if (isPlaying) {
+                icon.classList.remove('fa-play-circle');
+                icon.classList.add('fa-pause-circle');
+            } else {
+                icon.classList.remove('fa-pause-circle');
+                icon.classList.add('fa-play-circle');
+            }
+            sendBackendCommand(isPlaying ? 'resume' : 'pause');
+        }
+
+        function clearApp() { console.log("App cleared"); }
+
+        let pendingMode = null;
+        function sendBackendCommand(action, mode = null) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const payload = { action: action };
+                if (mode !== null) payload.mode = mode;
+                ws.send(JSON.stringify(payload));
+            } else if (action === 'set_mode' && mode !== null) {
+                pendingMode = mode;
+            }
+        }
+
+        const WS_URL = `ws://${location.host}/ws`;
+        let ws;
+        const lastDefectFrame = { left: null, right: null };
+        let chartLeft, chartRight;
+        let chartClipLeft1, chartClipRight1, chartClipLeft2, chartClipRight2;
+        let frameCountLeft = 0, frameCountRight = 0;
+        let frameCountFastenerLeft = 0, frameCountFastenerRight = 0;
+        const MAX_DATA_POINTS = 20;
+
+        function initCharts() {
+            // --- Grafik Deteksi Rel (Page Rail) ---
+            const commonOptions = {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: {
+                    // x: { title: { display: true, text: 'Frame', font: {size: 10} }, ticks: {font: {size: 8}} },
+                    // y: { title: { display: true, text: 'Defect', font: {size: 10} }, beginAtZero: true, ticks: {font: {size: 8}, stepSize: 1} }
+                    x: { display: false }, // Sembunyikan label X agar grafik muat di kotak kecil
+                    y: { beginAtZero: true, ticks: {font: {size: 8}, stepSize: 1} }
+                }, plugins: { legend: { display: false } }
+            };
+            const ctxLeft = document.getElementById('chart-left').getContext('2d');
+            chartLeft = new Chart(ctxLeft, { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#ef4444', borderWidth: 2, tension: 0.1, pointRadius: 1 }] }, options: commonOptions });
+            const ctxRight = document.getElementById('chart-right').getContext('2d');
+            chartRight = new Chart(ctxRight, { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#3b82f6', borderWidth: 2, tension: 0.1, pointRadius: 1 }] }, options: commonOptions });
+
+            // --- Grafik Fastener (Page Fastener) ---
+            const fastenerOptions = {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: {
+                    x: { display: false }, // Sembunyikan label X agar grafik muat di kotak kecil
+                    y: { beginAtZero: true, ticks: {font: {size: 8}, stepSize: 1} }
+                }, 
+                plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 8, font: {size: 8} } } }
+            };
+
+            const createFastenerChart = (ctxId, label1, color1, label2, color2) => {
+                return new Chart(document.getElementById(ctxId).getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            { label: label1, data: [], borderColor: color1, borderWidth: 1.5, tension: 0.1, pointRadius: 0 },
+                            { label: label2, data: [], borderColor: color2, borderWidth: 1.5, tension: 0.1, pointRadius: 0 }
+                        ]
+                    },
+                    options: fastenerOptions
+                });
+            };
+
+            // Baris 1: DE (Merah) & E (Biru)
+            chartClipLeft1 = createFastenerChart('chart-clip-left-1', 'DE', '#ef4444', 'E', '#3b82f6');
+            chartClipRight1 = createFastenerChart('chart-clip-right-1', 'DE', '#ef4444', 'E', '#3b82f6');
+            
+            // Baris 2: KA (Hijau) & No Clip (Orange)
+            chartClipLeft2 = createFastenerChart('chart-clip-left-2', 'KA', '#10b981', 'No Clip', '#f59e0b');
+            chartClipRight2 = createFastenerChart('chart-clip-right-2', 'KA', '#10b981', 'No Clip', '#f59e0b');
+        }
+
+        function updateDefectChart(chart, frameLabel, defectValue) {
+            chart.data.labels.push(frameLabel);
+            chart.data.datasets[0].data.push(defectValue);
+
+            // Batasi ke 50 data terbaru
+            if (chart.data.labels.length > MAX_DATA_POINTS) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            chart.update();
+        }
+
+        // Fungsi Helper untuk Update Multi-Line Chart
+        function updateFastenerChart(chart, frameLabel, val1, val2) {
+            chart.data.labels.push(frameLabel);
+            chart.data.datasets[0].data.push(val1);
+            chart.data.datasets[1].data.push(val2);
+
+            if (chart.data.labels.length > MAX_DATA_POINTS) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+                chart.data.datasets[1].data.shift();
+            }
+            chart.update();
+        }
+        const activeToasts = new Set();
+        function showToast(id, message, type = 'warning') {
+            if (activeToasts.has(id)) return;
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.id = `toast-${id}`;
+            let bgClass = 'bg-yellow-500';
+            let icon = '<i class="fas fa-exclamation-triangle mr-2"></i>';
+            if (type === 'error') { bgClass = 'bg-red-600'; icon = '<i class="fas fa-times-circle mr-2"></i>'; } 
+            else if (type === 'info') { bgClass = 'bg-blue-500'; icon = '<i class="fas fa-info-circle mr-2"></i>'; }
+            toast.className = `${bgClass} text-white px-4 py-2 rounded shadow-lg font-semibold flex items-center transition-all duration-300 transform translate-y-[-100%] opacity-0`;
+            toast.innerHTML = `${icon} <span>${message}</span>`;
+            container.appendChild(toast);
+            activeToasts.add(id);
+            setTimeout(() => toast.classList.remove('translate-y-[-100%]', 'opacity-0'), 10);
+        }
+
+        function hideToast(id) {
+            if (!activeToasts.has(id)) return;
+            const toast = document.getElementById(`toast-${id}`);
+            if (toast) {
+                toast.classList.add('translate-y-[-100%]', 'opacity-0');
+                setTimeout(() => { toast.remove(); activeToasts.delete(id); }, 300);
+            }
+        }
+
+        function updateThreshold() {
+            let val = document.getElementById('input-threshold').value;
+            let level_threshold = [50, 200, 300]
+            
+            // Kirim nilai threshold ke Python via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ 
+                    action: 'set_threshold', 
+                    value: parseInt(level_threshold[val - 1])
+                }));
+            }
+        }
+
+        function sendExportCommand() {
+            const command = {
+                action: "export"
+            };
+            // socket adalah variabel WebSocket yang Anda inisialisasi di awal
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(command));
+                console.log("Perintah ekspor dikirim ke server...");
+                alert("Data sedang di eksport ke excel")
+            } else {
+                alert("Koneksi server terputus!");
+            }
+        }
+
+        function connectWebSocket() {
+            ws = new WebSocket(WS_URL);
+            ws.onopen = () => {
+                console.log("System Connected to Backend.");
+                hideToast('server-err');
+                if (pendingMode !== null) { sendBackendCommand('set_mode', pendingMode); pendingMode = null; }
+            };
+            ws.onclose = () => {
+                console.warn("Disconnected. Retrying in 3s...");
+                showToast('server-err', 'Koneksi Server Terputus! Auto-retry dalam 3 detik...', 'error');
+                setTimeout(connectWebSocket, 3000); 
+            };
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'frame') renderFrameData(msg);
+                    else if (msg.type === 'frame_yolo') renderYoloFrameData(msg);
+                    else if (msg.type === 'log') renderLogData(msg);
+                    else if (msg.type === 'gps_status') {
+                        if (msg.status === 'searching') showToast('gps-status', msg.message, 'warning');
+                        else if (msg.status === 'fixed') {
+                            hideToast('gps-status');
+                            _setText('lat-left', msg.lat); _setText('long-left', msg.lon);
+                            _setText('lat-right', msg.lat); _setText('long-right', msg.lon);
+                        }
+                    } else if (msg.type === 'camera_error') {
+                        const toastId = `cam-err-${msg.camera_id}`;
+                        if (msg.status === 'disconnected') showToast(toastId, `Kamera ${msg.camera_id} terputus! Sedang menghubungkan ulang...`, 'error');
+                        else if (msg.status === 'connected') hideToast(toastId);
+                    }
+                } catch (e) { console.error("Parse WS error:", e); }
+            };
+        }
+
+        function parseTimestamp(ts) {
+            if (!ts || ts.length !== 15) return { date: '-', time: '-' };
+            return { date: `${ts.slice(0,4)}-${ts.slice(4,6)}-${ts.slice(6,8)}`, time: `${ts.slice(9,11)}:${ts.slice(11,13)}:${ts.slice(13,15)}` };
+        }
+
+        function mapDefectClasses(detectedClasses) {
+            let corrugation = 0, squat = 0, shelling = 0, rail_end = 0;
+            if (!Array.isArray(detectedClasses)) return { corrugation, squat, shelling, rail_end };
+            detectedClasses.forEach(c => {
+                const name = (c.name || '').toLowerCase();
+                if (name.includes('corrugation')) corrugation += c.count;
+                else if (name.includes('rail-end')) rail_end += c.count;
+                else if (name.includes('shelling')) shelling += c.count;
+                else if (name.includes('squat')) squat += c.count;
+            });
+            return { corrugation, rail_end, shelling, squat };
+        }
+
+        function renderFrameData(msg) {
+            const side = msg.camera_id === 1 ? 'left' : 'right';
+            const liveContainer = document.getElementById(`frame-defect-${side}`);
+            if (liveContainer) {
+                let liveImg = liveContainer.querySelector('img');
+                if (!liveImg) { liveImg = document.createElement('img'); liveImg.className = 'w-full h-full object-fill bg-black'; liveContainer.appendChild(liveImg); }
+                liveImg.src = `data:image/jpeg;base64,${msg.frame_b64}`;
+            }
+
+            if (msg.total_contours > 0) {
+                lastDefectFrame[side] = msg.frame_b64;
+                const frozenContainer = document.getElementById(`img-defect-${side}`);
+                if (frozenContainer) {
+                    let frozenImg = frozenContainer.querySelector('img');
+                    if (!frozenImg) { frozenImg = document.createElement('img'); frozenImg.className = 'w-full h-full object-fill bg-black'; frozenContainer.appendChild(frozenImg); }
+                    frozenImg.src = `data:image/jpeg;base64,${msg.frame_b64}`;
+                }
+            }
+
+            const { corrugation, squat, shelling, rail_end } = mapDefectClasses(msg.detected_classes);
+            _setText(`corrugation-${side}`, corrugation); _setText(`rail-end-${side}`, rail_end);
+            _setText(`shelling-${side}`, shelling); _setText(`squat-${side}`, squat);
+            _setText(`total-defect-${side}`, msg.total_contours);
+
+            if (side === 'left') { frameCountLeft++; updateDefectChart(chartLeft, frameCountLeft, msg.total_contours); } 
+            else { frameCountRight++; updateDefectChart(chartRight, frameCountRight, msg.total_contours); }
+
+            const dt = parseTimestamp(msg.timestamp);
+            _setText(`date-${side}`, dt.date); _setText(`time-${side}`, dt.time);
+        }
+
+        function renderLogData(msg) {
+            const acc = (msg.data || {})['Accuracy'] || '-';
+            _setText('accuracy-left', acc); _setText('accuracy-right', acc);
+            _setText('kmhm-left', 'N/A'); _setText('kmhm-right', 'N/A');
+        }
+
+        function renderYoloFrameData(msg) {
+            const side = msg.camera_id === 1 ? 'left' : 'right';
+            
+            // Render pintar berdasarkan halaman mana yang aktif untuk hindari error container tersembunyi
+            const activePage = document.querySelector('.page-section:not(.hidden-page)').id;
+            let targetId = null;
+
+            if (activePage === 'page-fastener') {
+                targetId = `frame-fastener-${side}`;
+            } else if (activePage === 'page-ballast') {
+                targetId = `frame-ballast-${side}`;
+            }
+
+            if (targetId) {
+                const container = document.getElementById(targetId);
+                if (container) {
+                    let img = container.querySelector('img');
+                    if (!img) {
+                        img = document.createElement('img');
+                        img.className = 'w-full h-full object-fill bg-black';
+                        container.appendChild(img);
+                    }
+                    img.src = `data:image/jpeg;base64,${msg.frame_b64}`;
+                }
+            }
+
+            // Render inspection count (hanya berlaku jika model yang aktif mengirim data inspeksi fastener)
+            if (msg.inspection && activePage === 'page-fastener') {
+                const clips = msg.inspection;
+                const de = clips['DE-Clip'] ?? 0;
+                const e = clips['E-Clip'] ?? 0;
+                const ka = clips['KA-Clip'] ?? 0;
+                const noClip = clips['No Clip'] ?? 0;
+
+                // Update text UI
+                _setText(`clip-${side}-de`, de);
+                _setText(`clip-${side}-e`, e);
+                _setText(`clip-${side}-ka`, ka);
+                _setText(`clip-${side}-no`, noClip);
+
+                // Update Grafik Fastener
+                if (side === 'left') {
+                    frameCountFastenerLeft++;
+                    updateFastenerChart(chartClipLeft1, frameCountFastenerLeft, de, e);
+                    updateFastenerChart(chartClipLeft2, frameCountFastenerLeft, ka, noClip);
+                } else {
+                    frameCountFastenerRight++;
+                    updateFastenerChart(chartClipRight1, frameCountFastenerRight, de, e);
+                    updateFastenerChart(chartClipRight2, frameCountFastenerRight, ka, noClip);
+                }
+            }        
+        }
+
+        function _setText(id, value) { const el = document.getElementById(id); if (el) el.textContent = value; }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            connectWebSocket();
+            const icon = document.getElementById('icon-play');
+            if (icon) { icon.classList.remove('fa-play-circle'); icon.classList.add('fa-pause-circle'); }
+            isPlaying = true;
+        });
+    </script>
+</body>
+</html>
