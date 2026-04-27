@@ -334,6 +334,7 @@
             // Set Trigger Mode Model
             if (pageId === 'rail') sendBackendCommand('set_mode', 'segformer');
             else if (pageId === 'fastener') sendBackendCommand('set_mode', 'yolo');
+            else if (pageId === 'ballast') sendBackendCommand('set_mode', 'yolo_ballast'); // TAMBAHKAN INI
             else sendBackendCommand('set_mode', 'standby');
         }
 
@@ -684,14 +685,14 @@
 
         function renderYoloFrameData(msg) {
             const side = msg.camera_id === 1 ? 'left' : 'right';
-            
-            // Render pintar berdasarkan halaman mana yang aktif untuk hindari error container tersembunyi
-            const activePage = document.querySelector('.page-section:not(.hidden-page)').id;
-            let targetId = null;
+            const mode = msg.mode; // Diambil dari field baru di backend
 
-            if (activePage === 'page-fastener') {
+            // --- 1. LOGIKA UPDATE GAMBAR (BUFFERING) ---
+            // Tentukan container berdasarkan mode, bukan page aktif
+            let targetId = '';
+            if (mode === 'yolo') {
                 targetId = `frame-fastener-${side}`;
-            } else if (activePage === 'page-ballast') {
+            } else if (mode === 'yolo_ballast') {
                 targetId = `frame-ballast-${side}`;
             }
 
@@ -704,37 +705,40 @@
                         img.className = 'w-full h-full object-fill bg-black';
                         container.appendChild(img);
                     }
+                    // Update src selalu dilakukan di background
                     img.src = `data:image/jpeg;base64,${msg.frame_b64}`;
                 }
             }
 
-            // Render inspection count (hanya berlaku jika model yang aktif mengirim data inspeksi fastener)
-            if (msg.inspection && activePage === 'page-fastener') {
-                const clips = msg.inspection;
-                const de = clips['DE-Clip'] ?? 0;
-                const e = clips['E-Clip'] ?? 0;
-                const ka = clips['KA-Clip'] ?? 0;
-                const noClip = clips['No Clip'] ?? 0;
+            // --- 2. LOGIKA UPDATE DATA INSPEKSI ---
+            if (msg.inspection) {
+                if (mode === 'yolo') {
+                    const clips = msg.inspection;
+                    // Update text UI Fastener
+                    _setText(`clip-${side}-de`, clips['DE-Clip'] ?? 0);
+                    _setText(`clip-${side}-e`, clips['E-Clip'] ?? 0);
+                    _setText(`clip-${side}-ka`, clips['KA-Clip'] ?? 0);
+                    _setText(`clip-${side}-no`, clips['No Clip'] ?? 0);
 
-                // Update text UI
-                _setText(`clip-${side}-de`, de);
-                _setText(`clip-${side}-e`, e);
-                _setText(`clip-${side}-ka`, ka);
-                _setText(`clip-${side}-no`, noClip);
-
-                // Update Grafik Fastener
-                if (side === 'left') {
-                    frameCountFastenerLeft++;
-                    updateFastenerChart(chartClipLeft1, frameCountFastenerLeft, de, e);
-                    updateFastenerChart(chartClipLeft2, frameCountFastenerLeft, ka, noClip);
-                } else {
-                    frameCountFastenerRight++;
-                    updateFastenerChart(chartClipRight1, frameCountFastenerRight, de, e);
-                    updateFastenerChart(chartClipRight2, frameCountFastenerRight, ka, noClip);
+                    // Update Grafik Fastener
+                    if (side === 'left') {
+                        frameCountFastenerLeft++;
+                        updateFastenerChart(chartClipLeft1, frameCountFastenerLeft, clips['DE-Clip'] ?? 0, clips['E-Clip'] ?? 0);
+                        updateFastenerChart(chartClipLeft2, frameCountFastenerLeft, clips['KA-Clip'] ?? 0, clips['No Clip'] ?? 0);
+                    } else {
+                        frameCountFastenerRight++;
+                        updateFastenerChart(chartClipRight1, frameCountFastenerRight, clips['DE-Clip'] ?? 0, clips['E-Clip'] ?? 0);
+                        updateFastenerChart(chartClipRight2, frameCountFastenerRight, clips['KA-Clip'] ?? 0, clips['No Clip'] ?? 0);
+                    }
+                } 
+                else if (mode === 'yolo_ballast') {
+                    const ballast = msg.inspection;
+                    // Update text UI Ballast
+                    _setText(`mud-pumping-${side}`, ballast['Mud Pumping'] ?? 0);
+                    _setText(`white-ballast-${side}`, ballast['White Ballast'] ?? 0);
                 }
-            }        
+            }
         }
-
         function _setText(id, value) { const el = document.getElementById(id); if (el) el.textContent = value; }
 
         window.addEventListener('DOMContentLoaded', () => {

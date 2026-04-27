@@ -1092,6 +1092,7 @@ class BatchWorkerProcess(Process):
         model.to(device).eval()
 
         yolo_model = YOLO("./final_model_v2/penambat.pt").to(device)
+        yolo_ballast_model = YOLO("./final_model_v2/ballast.pt").to(device)
 
         frame_buffer: dict[int, np.ndarray] = {}
         graph_started = False
@@ -1175,6 +1176,7 @@ class BatchWorkerProcess(Process):
                         processor,
                         model,
                         yolo_model,
+                        yolo_ballast_model,
                         device,
                         active_model,
                         current_gps_string,  # PASSING DATA GPS KE FUNGSI INI
@@ -1222,6 +1224,7 @@ class BatchWorkerProcess(Process):
         processor,
         model,
         yolo_model,
+        yolo_ballast_model,
         device,
         active_model,
         current_gps_string,
@@ -1324,9 +1327,10 @@ class BatchWorkerProcess(Process):
             total_contours_all = 0
             detected_classes = []
             clip_counts = {"DE-Clip": 0, "E-Clip": 0, "KA-Clip": 0, "No Clip": 0}
+            ballast_counts = {"Mud Pumping": 0, "White Ballast": 0}
 
             # ==========================================
-            # KONDISI 2: JALANKAN YOLO
+            # KONDISI 2: JALANKAN YOLO (fastener/penambat)
             # ==========================================
             if active_model == "yolo":
                 yolo_results = yolo_model(final_frame, verbose=False)
@@ -1335,7 +1339,29 @@ class BatchWorkerProcess(Process):
                         cls_name = yolo_model.names[int(box.cls[0])]
                         if cls_name in clip_counts:
                             clip_counts[cls_name] += 1
-                    final_frame = r.plot()
+                    final_frame = r.plot(labels=False, conf=False)
+
+            # ==========================================
+            # KONDISI 3: JALANKAN YOLO-SEG (BALLAST)
+            # ==========================================
+            # TAMBAHKAN BLOK INI
+            if active_model == "yolo_ballast":
+                yolo_results = yolo_ballast_model(final_frame, verbose=False)
+                for r in yolo_results:
+                    # Meskipun ini YOLO-Seg, class id tetap ada di r.boxes
+                    if r.boxes is not None:
+                        for box in r.boxes:
+                            cls_name = yolo_ballast_model.names[int(box.cls[0])]
+
+                            # Normalisasi nama kelas untuk mencegah error typo
+                            name_lower = cls_name.lower()
+                            if "mud" in name_lower:
+                                ballast_counts["Mud Pumping"] += 1
+                            elif "white" in name_lower or "putih" in name_lower:
+                                ballast_counts["White Ballast"] += 1
+
+                    # r.plot() secara otomatis akan menggambar mask segmentasi untuk model -seg
+                    final_frame = r.plot(labels=False, conf=False)
 
             # ==========================================
             # EKSTRAKSI SEGFORMER (JIKA ADA)
@@ -1387,13 +1413,16 @@ class BatchWorkerProcess(Process):
             broadcast_msgs.append(
                 {
                     "type": "frame" if active_model == "segformer" else "frame_yolo",
+                    "mode": active_model,  # "yolo" | "yolo_ballast" | "segformer"
                     "camera_id": camera_id,
                     "frame_b64": frame_b64,
                     "total_contours": total_contours_all,
                     "gps": base_log_data["GPS"],
                     "detected_classes": detected_classes,
                     "timestamp": timestamp,
-                    "inspection": clip_counts,
+                    "inspection": clip_counts
+                    if active_model == "yolo"
+                    else ballast_counts,
                 }
             )
 
