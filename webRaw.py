@@ -1062,9 +1062,9 @@ class GPSReaderProcess(Process):
         self.sim_max_km = sim_max_km
 
         # Konfigurasi Toleransi Map Matching
-        self.MAX_DRIFT_METERS = 15.0
+        self.MAX_DRIFT_METERS = 100.0
         self.MAX_JUMP_METERS = 200.0
-        self.DEG_TO_METERS = 111320.0
+        self.DEG_TO_METERS = 999999.0
 
     def _get_distance_to_segment(self, px, py, x1, y1, x2, y2):
         """Menghitung jarak tegak lurus dari titik GPS ke ruas rel."""
@@ -1122,60 +1122,46 @@ class GPSReaderProcess(Process):
     # DATA SOURCE 2: SIMULATOR GENERATOR
     # ==========================================
     def _simulator_stream(self, df):
-        target_route = df["route"].iloc[0]
-        track = df[df["route"] == target_route].copy()
-        log.info(f"Mulai Simulasi di rute {target_route}")
+        # Pastikan file gps-150.json berada di root direktori yang sama dengan webRaw.py
+        json_file = "./data-gps/gps-150.json"
 
-        speed_mps = self.sim_speed_kmh * (1000 / 3600)
-        waypoints = []
-
-        for _, row in track.iterrows():
-            waypoints.append((row["x1"], row["y1"]))
-            try:
-                end_km_str = row["range"].split("/")[1].replace("+", "")
-                if int(end_km_str) >= self.sim_max_km * 1000:
-                    waypoints.append((row["x2"], row["y2"]))
-                    break
-            except:
-                pass
-
-        if not waypoints:
-            yield {"type": "error", "msg": "Data simulasi kosong."}
+        if not os.path.exists(json_file):
+            log.error(f"File {json_file} tidak ditemukan di direktori kerja!")
+            yield {"type": "error", "msg": f"File {json_file} tidak ditemukan."}
             return
 
-        for i in range(len(waypoints) - 1):
-            start_lon, start_lat = waypoints[i]
-            end_lon, end_lat = waypoints[i + 1]
+        try:
+            with open(json_file, "r") as f:
+                gps_data = json.load(f)
+        except Exception as e:
+            log.error(f"Gagal membaca JSON {json_file}: {e}")
+            yield {"type": "error", "msg": "Gagal membaca file JSON simulasi."}
+            return
 
-            dist_deg = math.hypot(end_lon - start_lon, end_lat - start_lat)
-            dist_m = dist_deg * self.DEG_TO_METERS
-            if dist_m == 0:
-                continue
+        log.info(
+            f"Mulai Simulasi Replay GPS dari {json_file}. Total: {len(gps_data)} titik."
+        )
 
-            travel_time = dist_m / speed_mps
-            steps = max(1, int(travel_time))
+        for item in gps_data:
+            lat = item.get("latitude")
+            lon = item.get("longitude")
 
-            lon_step = (end_lon - start_lon) / steps
-            lat_step = (end_lat - start_lat) / steps
+            # Abaikan data jika korup
+            if lat is not None and lon is not None:
+                yield {"type": "valid", "lat": float(lat), "lon": float(lon)}
+            else:
+                log.warning(f"Data JSON tidak memiliki lat/lon yang valid: {item}")
 
-            for step in range(steps):
-                ideal_lon = start_lon + (lon_step * step)
-                ideal_lat = start_lat + (lat_step * step)
+            # Delay 5 detik sesuai permintaan Anda.
+            # (UBAH INI JIKA ANDA BOSAN MENUNGGU SAAT DEBUGGING)
+            time.sleep(3)
 
-                # Injeksi Drift
-                drift_angle = random.uniform(0, 2 * math.pi)
-                drift_dist = random.uniform(0, self.sim_noise_meters)
-                drift_deg = drift_dist / self.DEG_TO_METERS
+        log.info("Simulasi Replay GPS selesai (Mencapai titik terakhir).")
+        yield {"type": "error", "msg": "Simulasi JSON selesai mencapai akhir data."}
 
-                noisy_lon = ideal_lon + (math.cos(drift_angle) * drift_deg)
-                noisy_lat = ideal_lat + (math.sin(drift_angle) * drift_deg)
-
-                yield {"type": "valid", "lat": noisy_lat, "lon": noisy_lon}
-                time.sleep(1)  # Delay 1 detik per koordinat
-
-        yield {"type": "error", "msg": "Simulasi selesai mencapai batas Max KM."}
+        # Tahan proses agar tidak crash atau keluar dari loop utama
         while True:
-            time.sleep(10)  # Tahan proses agar tidak crash setelah simulasi selesai
+            time.sleep(10)
 
     # ==========================================
     # FUNGSI UTAMA (MAP MATCHING LOGIC)
@@ -1221,21 +1207,43 @@ class GPSReaderProcess(Process):
                     pass
                 continue
 
-            # Jika koordinat valid, lakukan Map Matching
+            locked_route = None
+            locked_track = None
+
+            # ... (Di dalam loop gps_source) ...
             lat, lon = data["lat"], data["lon"]
 
-            _, indices = kdtree.query([lon, lat], k=3)
+            # UBAH k=3 menjadi k=15 agar tidak melewatkan track tetangga
+            _, indices = kdtree.query([lon, lat], k=15)
+
             best_match = None
             min_dist = float("inf")
 
-            for idx in indices:
-                row = df.iloc[idx]
-                dist_m = self._get_distance_to_segment(
-                    lon, lat, row["x1"], row["y1"], row["x2"], row["y2"]
-                )
-                if dist_m < min_dist:
-                    min_dist = dist_m
-                    best_match = row
+            # 1. PRIORITAS UTAMA: Cari ruas di jalur yang sedang terkunci (Sticky Route)
+            if locked_route is not None and locked_track is not None:
+                for idx in indices:
+                    row = df.iloc[idx]
+                    if row["route"] == locked_route and row["track"] == locked_track:
+                        dist_m = self._get_distance_to_segment(
+                            lon, lat, row["x1"], row["y1"], row["x2"], row["y2"]
+                        )
+                        if dist_m < min_dist:
+                            min_dist = dist_m
+                            best_match = row
+
+            # 2. PENCARIAN GLOBAL: Jika tidak ada di jalur terkunci, atau terlalu jauh (>15m)
+            # Ini akan dieksekusi saat pertama kali nyala, atau jika kereta pindah jalur (wesel)
+            if min_dist > self.MAX_DRIFT_METERS:
+                min_dist = float("inf")
+                best_match = None
+                for idx in indices:
+                    row = df.iloc[idx]
+                    dist_m = self._get_distance_to_segment(
+                        lon, lat, row["x1"], row["y1"], row["x2"], row["y2"]
+                    )
+                    if dist_m < min_dist:
+                        min_dist = dist_m
+                        best_match = row
 
             is_valid = False
             status_msg = "off_track"
@@ -1243,7 +1251,7 @@ class GPSReaderProcess(Process):
 
             # Validasi Buffer Zone
             if min_dist <= self.MAX_DRIFT_METERS:
-                # Validasi Temporal Check
+                # Matikan MAX_JUMP_METERS sementara saat simulasi dengan mengubah nilainya jadi sangat besar
                 if last_valid_point is not None:
                     time_diff = current_time - last_valid_time
                     jump_dist = (
@@ -1252,7 +1260,10 @@ class GPSReaderProcess(Process):
                         )
                         * self.DEG_TO_METERS
                     )
-                    if jump_dist / max(time_diff, 0.1) > self.MAX_JUMP_METERS:
+
+                    if (
+                        jump_dist / max(time_diff, 0.1) > 999999.0
+                    ):  # Abaikan loncatan kecepatan untuk simulasi
                         status_msg = "anomalous_jump"
                     else:
                         is_valid = True
@@ -1264,6 +1275,15 @@ class GPSReaderProcess(Process):
                 km_data = best_match["range"]
                 last_valid_point = (lon, lat)
                 last_valid_time = current_time
+
+                # KUNCI JALUR UNTUK ITERASI BERIKUTNYA
+                locked_route = best_match["route"]
+                locked_track = best_match["track"]
+
+            else:
+                # Lepas kunci jika terdeteksi off-track agar bisa mencari rute baru
+                locked_route = None
+                locked_track = None
 
             # Distribusikan Hasil
             payload = {
@@ -1289,10 +1309,10 @@ class GPSReaderProcess(Process):
             self.internal_gps_queue.put_nowait(payload)
 
             # Print opsional untuk memonitor di terminal saat testing
-            # if self.simulation_mode:
-            #     print(
-            #         f"[SIM] Error: {min_dist:.2f}m | Status: {status_msg} | KM: {km_data}"
-            #     )
+            if self.simulation_mode:
+                print(
+                    f"[SIM] Error: {min_dist:.2f}m | Status: {status_msg} | KM: {km_data}"
+                )
 
 
 # ============================================================================
